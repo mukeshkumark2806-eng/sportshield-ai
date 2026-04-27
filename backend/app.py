@@ -36,6 +36,15 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 official_content = {}
 detection_history = []
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for any unhandled error."""
+    print(f"[CRITICAL ERROR] {str(e)}")
+    return jsonify({
+        "success": False,
+        "error": str(e)
+    }), 500
+
 import cv2
 import numpy as np
 
@@ -109,14 +118,12 @@ def extract_frames(file_path, target_count=3):
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
         duration = total_frames / fps
-
-        if duration > 15.1:
-            raise RuntimeError(f"Video too long ({round(duration, 1)}s). Max 15s allowed.")
+        print(f"[VIDEO] Processing: {round(duration, 1)}s, {total_frames} frames")
 
         if total_frames < 1:
             raise RuntimeError(f"Video has no readable frames.")
 
-        # Sample very few frames for speed (target_count default = 3)
+        # Sample 3 frames across ANY duration (don't limit to 15s)
         margin  = max(1, int(total_frames * 0.05))
         usable  = range(margin, total_frames - margin)
         step    = max(1, len(usable) // target_count)
