@@ -27,10 +27,17 @@ cloudinary.config(
 )
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# Super permissive CORS for demo
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+@app.before_request
+def log_request_info():
+    print(f"\n[REQUEST] {request.method} {request.url}")
+    print(f"[HEADERS] {dict(request.headers)}")
+
+UPLOAD_FOLDER = "/tmp/uploads" if os.environ.get("RENDER") else os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+print(f"[INIT] Upload folder: {UPLOAD_FOLDER}")
 
 # ─── In-memory storage for demo ─────────────────
 official_content = {}
@@ -413,38 +420,43 @@ def upload_official():
         fingerprint = generate_perceptual_hash(filepath)
         print(f"[UPLOAD] Fingerprint generated successfully.")
 
-        # 2. Then Upload to Cloudinary
-        print(f"[UPLOAD] Uploading to Cloudinary...")
-        secure_url = "https://placeholder.com"
-        try:
-            upload_result = cloudinary.uploader.upload(
-                filepath, 
-                resource_type="auto", 
-                folder="sportshield_official"
-            )
-            secure_url = upload_result.get("secure_url")
-            print(f"[UPLOAD] Cloudinary success: {secure_url}")
-        except Exception as e:
-            print(f"[UPLOAD] Cloudinary WARNING: {e}")
-            # Continue even if Cloudinary fails for demo purposes
-        
+        # 2. Then Upload to Cloudinary in BACKGROUND to avoid timeout
+        def upload_to_cloudinary(path, cid):
+            try:
+                print(f"[ASYNC] Starting Cloudinary upload for {cid}...")
+                upload_result = cloudinary.uploader.upload(
+                    path, 
+                    resource_type="auto", 
+                    folder="sportshield_official"
+                )
+                url = upload_result.get("secure_url")
+                if cid in official_content:
+                    official_content[cid]['secure_url'] = url
+                print(f"[ASYNC] Cloudinary success for {cid}: {url}")
+            except Exception as e:
+                print(f"[ASYNC] Cloudinary ERROR for {cid}: {e}")
+
         content_id = f"OFF-{len(official_content) + 1:03d}"
         official_content[content_id] = {
             'id': content_id,
             'filename': file.filename,
             'fingerprint': fingerprint,
-            'secure_url': secure_url,
+            'secure_url': "Pending...", # Will be updated by background thread
             'uploaded_at': datetime.utcnow().isoformat(),
             'status': 'Active'
         }
 
-        print(f"[UPLOAD] Complete: {content_id}")
+        import threading
+        thread = threading.Thread(target=upload_to_cloudinary, args=(filepath, content_id))
+        thread.start()
+
+        print(f"[UPLOAD] Complete: {content_id}. Returning to frontend.")
         return jsonify({
             'success': True,
             'content_id': content_id,
             'filename': file.filename,
             'fingerprint': fingerprint,
-            'secure_url': secure_url
+            'secure_url': "Pending..." # Frontend can show pending or just ignore
         })
 
     except Exception as e:
@@ -472,25 +484,28 @@ def upload_suspicious():
         print(f"[SUSPICIOUS] Generating fingerprint...")
         sus_fingerprint = generate_perceptual_hash(filepath)
         
-        # 2. Cloudinary second
-        print(f"[SUSPICIOUS] Uploading to Cloudinary...")
-        secure_url = "https://placeholder.com"
-        try:
-            upload_result = cloudinary.uploader.upload(
-                filepath, 
-                resource_type="auto", 
-                folder="sportshield_suspicious"
-            )
-            secure_url = upload_result.get("secure_url")
-        except Exception as e:
-            print(f"[SUSPICIOUS] Cloudinary warning: {e}")
+        # 2. Cloudinary second in BACKGROUND
+        def upload_async(path):
+            try:
+                print(f"[ASYNC-SUS] Starting Cloudinary upload...")
+                cloudinary.uploader.upload(
+                    path, 
+                    resource_type="auto", 
+                    folder="sportshield_suspicious"
+                )
+                print(f"[ASYNC-SUS] Cloudinary success.")
+            except Exception as e:
+                print(f"[ASYNC-SUS] Cloudinary warning: {e}")
 
-        print(f"[SUSPICIOUS] Complete.")
+        import threading
+        threading.Thread(target=upload_async, args=(filepath,)).start()
+
+        print(f"[SUSPICIOUS] Complete. Returning.")
         return jsonify({
             'success': True,
             'filename': file.filename,
             'fingerprint': sus_fingerprint,
-            'secure_url': secure_url,
+            'secure_url': "Pending...",
         })
     except Exception as e:
         print(f"[SUSPICIOUS] ERROR: {e}")
