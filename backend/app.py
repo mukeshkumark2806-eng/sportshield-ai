@@ -27,7 +27,7 @@ cloudinary.config(
 )
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["https://sportshield-ai-gfnt.vercel.app", "http://localhost:5173"]}})
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -244,7 +244,7 @@ def compare_audio(off_path, sus_path):
 # MULTI-FRAME COMPARISON ENGINE
 # ──────────────────────────────────────────────────
 
-def compare_media_files(off_path, sus_path, target_frames=12):
+def compare_media_files(off_path, sus_path, target_frames=5):
     """
     Compare two media files using weighted multi-modal fingerprinting.
 
@@ -497,7 +497,7 @@ def detect_piracy():
 
     cmp_result = None
     try:
-        cmp_result = compare_media_files(off_filepath, sus_filepath, target_frames=12)
+        cmp_result = compare_media_files(off_filepath, sus_filepath, target_frames=5)
 
     except RuntimeError as e:
         for p in (sus_filepath, off_filepath):
