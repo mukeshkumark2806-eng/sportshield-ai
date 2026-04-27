@@ -501,18 +501,19 @@ def upload_suspicious():
 def detect_piracy():
     """Compare suspicious content against official content."""
     print(f"\n[DETECT] Start: {datetime.utcnow().isoformat()}")
+    
+    sus_filepath = None
+    off_filepath = None
+    
     try:
         if request.content_length and request.content_length > 20 * 1024 * 1024:
             return jsonify({'success': False, 'error': 'Files too large. Max 10MB each.'}), 413
 
-        if 'suspicious_file' not in request.files:
-            return jsonify({'success': False, 'error': 'No suspicious file provided'}), 400
+        if 'suspicious_file' not in request.files or 'official_file' not in request.files:
+            return jsonify({'success': False, 'error': 'Both files are required'}), 400
 
         suspicious_file = request.files['suspicious_file']
-        official_file   = request.files.get('official_file')
-
-        if not official_file:
-            return jsonify({'success': False, 'error': 'Official file required'}), 400
+        official_file   = request.files['official_file']
 
         sus_filepath = os.path.join(UPLOAD_FOLDER, 'det_sus_' + suspicious_file.filename)
         off_filepath = os.path.join(UPLOAD_FOLDER, 'det_off_' + official_file.filename)
@@ -521,58 +522,54 @@ def detect_piracy():
         official_file.save(off_filepath)
 
         print(f"[DETECT] Files saved. Starting comparison...")
-        # Use only 3 frames for the demo to be fast
         cmp_result = compare_media_files(off_filepath, sus_filepath, target_frames=3)
         print(f"[DETECT] Comparison complete: Score={cmp_result['score']}")
+
+        match_pct  = cmp_result['score']
+        video_sim  = cmp_result['video_sim']
+        audio_sim  = cmp_result['audio_sim']
+        meta_sim   = cmp_result['meta_sim']
+
+        # Risk thresholds
+        if match_pct >= 85:
+            risk_level = 'High'
+        elif match_pct >= 60:
+            risk_level = 'Medium'
+        else:
+            risk_level = 'Low'
+
+        modifications = detect_modifications(match_pct, audio_sim=audio_sim, meta_sim=meta_sim)
+        is_edited     = match_pct < 98
+
+        result = {
+            'success':         True,
+            'officialFile':    official_file.filename,
+            'suspiciousFile':  suspicious_file.filename,
+            'matchPercentage': match_pct,
+            'riskLevel':       risk_level,
+            'editedCopy':      is_edited,
+            'modifications':   modifications,
+            'timestamp':       datetime.utcnow().isoformat(),
+            'status':          'Active',
+            'analysis': {
+                'algorithm':  'Weighted DCT-pHash + Audio + Metadata',
+                'video_sim':  video_sim,
+                'audio_sim':  audio_sim,
+                'meta_sim':   meta_sim,
+                'frames_used': 3,
+            }
+        }
+        return jsonify(result)
+
     except Exception as e:
         print(f"[DETECT] ERROR: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
-        # Cleanup
-        for p in [os.path.join(UPLOAD_FOLDER, 'det_sus_' + suspicious_file.filename), 
-                  os.path.join(UPLOAD_FOLDER, 'det_off_' + official_file.filename)]:
+        # Cleanup safely
+        for p in [sus_filepath, off_filepath]:
             try: 
-                if os.path.exists(p): os.remove(p)
+                if p and os.path.exists(p): os.remove(p)
             except: pass
-
-    match_pct  = cmp_result['score']
-    video_sim  = cmp_result['video_sim']
-    audio_sim  = cmp_result['audio_sim']
-    meta_sim   = cmp_result['meta_sim']
-
-    # Risk thresholds
-    if match_pct >= 85:
-        risk_level = 'High'
-    elif match_pct >= 60:
-        risk_level = 'Medium'
-    else:
-        risk_level = 'Low'
-
-    modifications = detect_modifications(match_pct, audio_sim=audio_sim, meta_sim=meta_sim)
-    is_edited     = match_pct < 98
-
-    result = {
-        'success':         True,
-        'officialFile':    official_file.filename,
-        'suspiciousFile':  suspicious_file.filename,
-        'matchPercentage': match_pct,
-        'riskLevel':       risk_level,
-        'editedCopy':      is_edited,
-        'modifications':   modifications,
-        'timestamp':       datetime.utcnow().isoformat(),
-        'status':          'Active',
-        'analysis': {
-            'algorithm':  'Weighted DCT-pHash + Audio + Metadata',
-            'video_sim':  video_sim,
-            'audio_sim':  audio_sim,
-            'meta_sim':   meta_sim,
-            'frames_used': 12,
-        }
-    }
-
-    return jsonify(result)
-
-
 
 
 @app.route('/api/detections', methods=['GET'])
