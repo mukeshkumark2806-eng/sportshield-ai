@@ -76,18 +76,27 @@ def hamming_similarity(hash1: int, hash2: int, bits: int = 64) -> float:
 # FRAME EXTRACTION
 # ──────────────────────────────────────────────────
 
+@app.route('/', methods=['GET'])
+def root_check():
+    """Root endpoint to satisfy Render's default health check."""
+    return jsonify({
+        'status': 'active',
+        'message': 'SportShield AI API is running'
+    })
+
 def extract_frames(file_path, target_count=10):
     """
     Extract up to `target_count` evenly-spaced, non-blank grayscale frames
     from a video OR return the image itself for image files.
-    Returns list of grayscale numpy arrays, or raises RuntimeError.
+    Returns list of small grayscale numpy arrays to save memory.
     """
     # ── Images ──────────────────────────────────────
     img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     if img is not None:
         if is_blank_frame(img):
             raise RuntimeError(f"File '{file_path}' appears to be a blank/dark image.")
-        return [img]
+        # Resize immediately to save memory (DCT_HASH_SIZE = 32)
+        return [cv2.resize(img, (32, 32))]
 
     # ── Videos ──────────────────────────────────────
     cap = cv2.VideoCapture(file_path)
@@ -95,13 +104,11 @@ def extract_frames(file_path, target_count=10):
         raise RuntimeError(f"OpenCV could not open file: {file_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps          = cap.get(cv2.CAP_PROP_FPS) or 25.0
-
+    
     if total_frames < 1:
         cap.release()
         raise RuntimeError(f"Video has no readable frames: {file_path}")
 
-    # Sample positions spread evenly, skip first & last 5% to avoid title cards
     margin  = max(1, int(total_frames * 0.05))
     usable  = range(margin, total_frames - margin)
     step    = max(1, len(usable) // target_count)
@@ -114,16 +121,14 @@ def extract_frames(file_path, target_count=10):
         if not ret:
             continue
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if not is_blank_frame(gray):          # skip blank/dark frames
-            frames.append(gray)
+        if not is_blank_frame(gray):
+            # Resize immediately to save memory
+            frames.append(cv2.resize(gray, (32, 32)))
 
     cap.release()
 
     if not frames:
-        raise RuntimeError(
-            f"All sampled frames in '{file_path}' were blank or unreadable. "
-            "Ensure the video is not all-black or corrupted."
-        )
+        raise RuntimeError(f"No usable frames in '{file_path}'.")
 
     return frames
 
