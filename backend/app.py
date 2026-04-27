@@ -563,8 +563,6 @@ def get_stats():
 
 
 if __name__ == '__main__':
-    print("\n🛡️  SportShield AI Backend Server")
-    print("=" * 40)
-    print(f"Server running on http://localhost:5000")
-    print("OpenCV-ready detection endpoint active\n")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🛡️  SportShield AI Backend Server running on port {port}")
+    app.run(host='0.0.0.0', port=port)
