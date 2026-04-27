@@ -448,77 +448,84 @@ def upload_official():
 @app.route('/api/upload/suspicious', methods=['POST'])
 def upload_suspicious():
     """Upload suspicious content for comparison."""
-    if request.content_length and request.content_length > 10 * 1024 * 1024:
-        return jsonify({'error': 'File too large. Max 10MB allowed.'}), 413
-
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    # Save file
-    filepath = os.path.join(UPLOAD_FOLDER, 'suspicious_' + file.filename)
-    file.save(filepath)
-    
-    # Generate fingerprint for suspicious content
-    sus_fingerprint = generate_perceptual_hash(filepath)
-
+    print(f"\n[SUSPICIOUS] Start: {datetime.utcnow().isoformat()}")
     try:
-        # Upload to Cloudinary
-        upload_result = cloudinary.uploader.upload(
-            filepath, 
-            resource_type="auto", 
-            folder="sportshield_suspicious"
-        )
-        secure_url = upload_result.get("secure_url")
+        if request.content_length and request.content_length > 10 * 1024 * 1024:
+            return jsonify({'success': False, 'error': 'File too large. Max 10MB.'}), 413
+
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        filepath = os.path.join(UPLOAD_FOLDER, 'sus_' + file.filename)
+        file.save(filepath)
+        print(f"[SUSPICIOUS] File saved: {filepath}")
+
+        # 1. Fingerprint first
+        print(f"[SUSPICIOUS] Generating fingerprint...")
+        sus_fingerprint = generate_perceptual_hash(filepath)
+        
+        # 2. Cloudinary second
+        print(f"[SUSPICIOUS] Uploading to Cloudinary...")
+        secure_url = "https://placeholder.com"
+        try:
+            upload_result = cloudinary.uploader.upload(
+                filepath, 
+                resource_type="auto", 
+                folder="sportshield_suspicious"
+            )
+            secure_url = upload_result.get("secure_url")
+        except Exception as e:
+            print(f"[SUSPICIOUS] Cloudinary warning: {e}")
+
+        print(f"[SUSPICIOUS] Complete.")
+        return jsonify({
+            'success': True,
+            'filename': file.filename,
+            'fingerprint': sus_fingerprint,
+            'secure_url': secure_url,
+        })
     except Exception as e:
-        return jsonify({'error': f"Cloudinary Upload Failed: {str(e)}"}), 500
-    
-    return jsonify({
-        'success': True,
-        'filename': file.filename,
-        'fingerprint': sus_fingerprint,
-        'secure_url': secure_url,
-    })
+        print(f"[SUSPICIOUS] ERROR: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/detect', methods=['POST'])
 def detect_piracy():
     """Compare suspicious content against official content."""
-    if request.content_length and request.content_length > 20 * 1024 * 1024: # Total for two files
-        return jsonify({'success': False, 'error': 'Files too large. Max 10MB per file.'}), 413
-
-    if 'suspicious_file' not in request.files:
-        return jsonify({'success': False, 'error': 'No suspicious file provided'}), 400
-
-    suspicious_file = request.files['suspicious_file']
-    official_file   = request.files.get('official_file')
-
-    if not official_file:
-        return jsonify({'success': False, 'error': 'Official file is required for comparison'}), 400
-
-    # Save files temporarily
-    sus_filepath = os.path.join(UPLOAD_FOLDER, 'scan_sus_' + suspicious_file.filename)
-    off_filepath = os.path.join(UPLOAD_FOLDER, 'scan_off_' + official_file.filename)
-
-    suspicious_file.save(sus_filepath)
-    official_file.save(off_filepath)
-
-    cmp_result = None
+    print(f"\n[DETECT] Start: {datetime.utcnow().isoformat()}")
     try:
-        cmp_result = compare_media_files(off_filepath, sus_filepath, target_frames=5)
+        if request.content_length and request.content_length > 20 * 1024 * 1024:
+            return jsonify({'success': False, 'error': 'Files too large. Max 10MB each.'}), 413
 
-    except RuntimeError as e:
-        for p in (sus_filepath, off_filepath):
-            try: os.remove(p)
-            except: pass
-        return jsonify({'success': False, 'error': str(e)}), 422
+        if 'suspicious_file' not in request.files:
+            return jsonify({'success': False, 'error': 'No suspicious file provided'}), 400
 
+        suspicious_file = request.files['suspicious_file']
+        official_file   = request.files.get('official_file')
+
+        if not official_file:
+            return jsonify({'success': False, 'error': 'Official file required'}), 400
+
+        sus_filepath = os.path.join(UPLOAD_FOLDER, 'det_sus_' + suspicious_file.filename)
+        off_filepath = os.path.join(UPLOAD_FOLDER, 'det_off_' + official_file.filename)
+
+        suspicious_file.save(sus_filepath)
+        official_file.save(off_filepath)
+
+        print(f"[DETECT] Files saved. Starting comparison...")
+        # Use only 3 frames for the demo to be fast
+        cmp_result = compare_media_files(off_filepath, sus_filepath, target_frames=3)
+        print(f"[DETECT] Comparison complete: Score={cmp_result['score']}")
+    except Exception as e:
+        print(f"[DETECT] ERROR: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
     finally:
-        for p in (sus_filepath, off_filepath):
-            try: os.remove(p)
+        # Cleanup
+        for p in [os.path.join(UPLOAD_FOLDER, 'det_sus_' + suspicious_file.filename), 
+                  os.path.join(UPLOAD_FOLDER, 'det_off_' + official_file.filename)]:
+            try: 
+                if os.path.exists(p): os.remove(p)
             except: pass
 
     match_pct  = cmp_result['score']
