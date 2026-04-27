@@ -27,7 +27,7 @@ cloudinary.config(
 )
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": ["https://sportshield-ai-gfnt.vercel.app", "http://localhost:5173"]}})
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

@@ -3,7 +3,8 @@
 // Handles communication with the Flask Detection API
 // ═══════════════════════════════════════════════════
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://sportshield-ai-fioa.onrender.com/api';
+const VITE_API_URL = import.meta.env.VITE_API_URL || 'https://sportshield-ai-fioa.onrender.com';
+const API_BASE_URL = `${VITE_API_URL}/api`;
 
 /**
  * Upload official content to the backend analyzer to generate fingerprint
