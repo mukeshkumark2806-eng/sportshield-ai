@@ -84,53 +84,58 @@ def root_check():
         'message': 'SportShield AI API is running'
     })
 
-def extract_frames(file_path, target_count=10):
+def extract_frames(file_path, target_count=5):
     """
-    Extract up to `target_count` evenly-spaced, non-blank grayscale frames
-    from a video OR return the image itself for image files.
-    Returns list of small grayscale numpy arrays to save memory.
+    Extract up to `target_count` evenly-spaced, non-blank grayscale frames.
+    Limits: Max 15 seconds duration. 
+    Returns list of 32x32 grayscale numpy arrays.
     """
     # ── Images ──────────────────────────────────────
     img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
     if img is not None:
         if is_blank_frame(img):
-            raise RuntimeError(f"File '{file_path}' appears to be a blank/dark image.")
-        # Resize immediately to save memory (DCT_HASH_SIZE = 32)
+            raise RuntimeError(f"Blank image detected.")
         return [cv2.resize(img, (32, 32))]
 
     # ── Videos ──────────────────────────────────────
     cap = cv2.VideoCapture(file_path)
     if not cap.isOpened():
-        raise RuntimeError(f"OpenCV could not open file: {file_path}")
+        raise RuntimeError(f"Could not open video file.")
 
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    if total_frames < 1:
-        cap.release()
-        raise RuntimeError(f"Video has no readable frames: {file_path}")
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        duration = total_frames / fps
 
-    margin  = max(1, int(total_frames * 0.05))
-    usable  = range(margin, total_frames - margin)
-    step    = max(1, len(usable) // target_count)
-    indices = list(usable)[::step][:target_count]
+        if duration > 15.1:
+            raise RuntimeError(f"Video too long ({round(duration, 1)}s). Max 15s allowed for demo.")
 
-    frames = []
-    for idx in indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-        ret, frame = cap.read()
-        if not ret:
-            continue
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if not is_blank_frame(gray):
-            # Resize immediately to save memory
+        if total_frames < 1:
+            raise RuntimeError(f"Video has no readable frames.")
+
+        # Sample fewer frames for speed (target_count default = 5)
+        margin  = max(1, int(total_frames * 0.05))
+        usable  = range(margin, total_frames - margin)
+        step    = max(1, len(usable) // target_count)
+        indices = list(usable)[::step][:target_count]
+
+        frames = []
+        for idx in indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Resize immediately to 32x32
             frames.append(cv2.resize(gray, (32, 32)))
 
-    cap.release()
+        if not frames:
+            raise RuntimeError(f"No usable frames found in video.")
+        
+        return frames
 
-    if not frames:
-        raise RuntimeError(f"No usable frames in '{file_path}'.")
-
-    return frames
+    finally:
+        cap.release()
 
 
 # ──────────────────────────────────────────────────
@@ -140,10 +145,12 @@ def extract_frames(file_path, target_count=10):
 def generate_perceptual_hash(file_path):
     """
     Extract multi-frame DCT pHashes for a media file.
-    Returns dict with 'hashes' list and 'phash' (first hash string).
     """
-    frames = extract_frames(file_path, target_count=10)
-    hashes = [dct_phash(f) for f in frames]
+    try:
+        frames = extract_frames(file_path, target_count=5)
+        hashes = [dct_phash(f) for f in frames]
+    except Exception as e:
+        raise RuntimeError(f"Fingerprint generation failed: {str(e)}")
 
     with open(file_path, 'rb') as fh:
         first_bytes = fh.read(8192)
@@ -377,6 +384,9 @@ def health_check():
 @app.route('/api/upload/official', methods=['POST'])
 def upload_official():
     """Upload official content and generate fingerprint."""
+    if request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'error': 'File too large. Max 10MB allowed.'}), 413
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
     
@@ -427,6 +437,9 @@ def upload_official():
 @app.route('/api/upload/suspicious', methods=['POST'])
 def upload_suspicious():
     """Upload suspicious content for comparison."""
+    if request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'error': 'File too large. Max 10MB allowed.'}), 413
+
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
     
@@ -462,7 +475,10 @@ def upload_suspicious():
 
 @app.route('/api/detect', methods=['POST'])
 def detect_piracy():
-    """Compare suspicious content against official content — weighted multi-modal fingerprint."""
+    """Compare suspicious content against official content."""
+    if request.content_length and request.content_length > 20 * 1024 * 1024: # Total for two files
+        return jsonify({'success': False, 'error': 'Files too large. Max 10MB per file.'}), 413
+
     if 'suspicious_file' not in request.files:
         return jsonify({'success': False, 'error': 'No suspicious file provided'}), 400
 
