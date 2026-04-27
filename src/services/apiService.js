@@ -1,7 +1,4 @@
-// ═══════════════════════════════════════════════════
-// API Service — SportShield AI
-// Handles communication with the Flask Detection API
-// ═══════════════════════════════════════════════════
+import { generateFingerprint, compareContent } from '../utils/detectionEngine';
 
 let VITE_API_URL = import.meta.env.VITE_API_URL || 'https://sportshield-ai-fioa.onrender.com';
 
@@ -18,14 +15,11 @@ const API_BASE_URL = `${VITE_API_URL}/api`;
 console.log("🚀 [API Service] Connecting to:", API_BASE_URL);
 
 /**
- * Helper to handle fetch errors
+ * Helper to handle fetch errors and provide fallback
  */
-const handleFetchError = (error, endpoint) => {
-  console.error(`❌ [API Error] ${endpoint}:`, error);
-  if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-    throw new Error(`Could not connect to the Detection API at ${API_BASE_URL}. Please ensure the Python backend is running locally on port 5000.`);
-  }
-  throw error;
+const handleFetchError = (error, endpoint, fallbackFn) => {
+  console.warn(`⚠️ [API Warning] ${endpoint} failed, using local mock fallback:`, error.message);
+  return fallbackFn();
 };
 
 /**
@@ -52,7 +46,14 @@ export const registerContentToEngine = async (file) => {
     }
     return data;
   } catch (error) {
-    return handleFetchError(error, 'upload/official');
+    return handleFetchError(error, 'upload/official', () => ({
+      success: true,
+      content_id: `MOCK-OFF-${Math.random().toString(16).slice(2, 8)}`,
+      filename: file.name,
+      fingerprint: generateFingerprint(file),
+      secure_url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=800',
+      isMock: true
+    }));
   }
 };
 
@@ -85,6 +86,13 @@ export const detectPiracy = async (suspiciousFile, officialFile) => {
     
     return detectionData;
   } catch (error) {
-    return handleFetchError(error, 'detect');
+    return handleFetchError(error, 'detect', () => {
+      const mockResult = compareContent(officialFile, suspiciousFile);
+      return {
+        success: true,
+        ...mockResult,
+        isMock: true
+      };
+    });
   }
 };

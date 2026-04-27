@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   HiOutlineUpload,
   HiOutlineSearch,
@@ -13,7 +13,7 @@ import {
   HiOutlineFilm,
 } from 'react-icons/hi';
 import { HiOutlineChevronDown } from 'react-icons/hi';
-import { formatFileSize, compareContent } from '../utils/detectionEngine';
+import { formatFileSize } from '../utils/detectionEngine';
 import './Scan.css';
 
 const SOURCES = [
