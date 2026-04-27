@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment files — keep secrets off GitHub
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Build output
+dist/
+build/
+
+# Vite cache
+node_modules/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploaded temp files
+backend/uploads/
+
+# IDE
+.vscode/
+.idea/

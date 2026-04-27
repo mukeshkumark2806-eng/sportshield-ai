@@ -1,0 +1,189 @@
+/* ═══════════════════════════════════════════════════
+   Alerts Page Styles
+   ═══════════════════════════════════════════════════ */
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.title-icon {
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.alert-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--danger-bg);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--danger);
+  letter-spacing: 0.08em;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse-glow 1.5s infinite;
+}
+
+.alert-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.alert-filter-btn {
+  padding: 8px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 100px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.alert-filter-btn:hover {
+  border-color: var(--border-secondary);
+}
+
+.alert-filter-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.alert-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-card {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.alert-card:hover {
+  border-color: var(--border-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+.alert-card.critical {
+  border-left: none;
+}
+
+.alert-card.warning {
+  border-left: none;
+}
+
+.ac-indicator-bar {
+  width: 4px;
+  flex-shrink: 0;
+}
+
+.alert-card.critical .ac-indicator-bar {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger-glow);
+}
+
+.alert-card.warning .ac-indicator-bar {
+  background: var(--warning);
+}
+
+.ac-icon {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  padding: 16px 0 16px 12px;
+}
+
+.alert-card.critical .ac-icon {
+  color: var(--danger);
+}
+
+.alert-card.warning .ac-icon {
+  color: var(--warning);
+}
+
+.ac-body {
+  flex: 1;
+  padding: 16px 0;
+  min-width: 0;
+}
+
+.ac-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.ac-top h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.ac-message {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.ac-meta {
+  display: flex;
+  gap: 20px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.ac-meta strong {
+  color: var(--text-primary);
+}
+
+.ac-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ac-dismiss:hover {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.alert-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: var(--success);
+  margin-bottom: 12px;
+}
