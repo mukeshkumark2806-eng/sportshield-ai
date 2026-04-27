@@ -84,23 +84,26 @@ def root_check():
         'message': 'SportShield AI API is running'
     })
 
-def extract_frames(file_path, target_count=5):
+def extract_frames(file_path, target_count=3):
     """
     Extract up to `target_count` evenly-spaced, non-blank grayscale frames.
     Limits: Max 15 seconds duration. 
     Returns list of 32x32 grayscale numpy arrays.
     """
     # ── Images ──────────────────────────────────────
-    img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
-    if img is not None:
-        if is_blank_frame(img):
-            raise RuntimeError(f"Blank image detected.")
-        return [cv2.resize(img, (32, 32))]
+    try:
+        img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)
+        if img is not None:
+            if is_blank_frame(img):
+                raise RuntimeError(f"Blank image detected.")
+            return [cv2.resize(img, (32, 32))]
+    except Exception as e:
+        print(f"Image read error: {e}")
 
     # ── Videos ──────────────────────────────────────
     cap = cv2.VideoCapture(file_path)
     if not cap.isOpened():
-        raise RuntimeError(f"Could not open video file.")
+        raise RuntimeError(f"OpenCV could not open video file. Unsupported codec or corrupted file.")
 
     try:
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -108,12 +111,12 @@ def extract_frames(file_path, target_count=5):
         duration = total_frames / fps
 
         if duration > 15.1:
-            raise RuntimeError(f"Video too long ({round(duration, 1)}s). Max 15s allowed for demo.")
+            raise RuntimeError(f"Video too long ({round(duration, 1)}s). Max 15s allowed.")
 
         if total_frames < 1:
             raise RuntimeError(f"Video has no readable frames.")
 
-        # Sample fewer frames for speed (target_count default = 5)
+        # Sample very few frames for speed (target_count default = 3)
         margin  = max(1, int(total_frames * 0.05))
         usable  = range(margin, total_frames - margin)
         step    = max(1, len(usable) // target_count)
@@ -147,10 +150,11 @@ def generate_perceptual_hash(file_path):
     Extract multi-frame DCT pHashes for a media file.
     """
     try:
-        frames = extract_frames(file_path, target_count=5)
+        frames = extract_frames(file_path, target_count=3)
         hashes = [dct_phash(f) for f in frames]
     except Exception as e:
-        raise RuntimeError(f"Fingerprint generation failed: {str(e)}")
+        print(f"Fingerprint Error: {e}")
+        raise RuntimeError(str(e))
 
     with open(file_path, 'rb') as fh:
         first_bytes = fh.read(8192)
@@ -384,54 +388,61 @@ def health_check():
 @app.route('/api/upload/official', methods=['POST'])
 def upload_official():
     """Upload official content and generate fingerprint."""
-    if request.content_length and request.content_length > 10 * 1024 * 1024:
-        return jsonify({'error': 'File too large. Max 10MB allowed.'}), 413
-
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    # Save file
-    filepath = os.path.join(UPLOAD_FOLDER, 'official_' + file.filename)
-    file.save(filepath)
-    
-    # Generate fingerprint
-    fingerprint = generate_perceptual_hash(filepath)
-    
+    print(f"\n[UPLOAD] Start: {datetime.utcnow().isoformat()}")
     try:
-        # Upload to Cloudinary
-        upload_result = cloudinary.uploader.upload(
-            filepath, 
-            resource_type="auto", 
-            folder="sportshield_official"
-        )
-        secure_url = upload_result.get("secure_url")
-    except Exception as e:
-        return jsonify({'error': f"Cloudinary Upload Failed: {str(e)}"}), 500
+        if request.content_length and request.content_length > 10 * 1024 * 1024:
+            return jsonify({'success': False, 'error': 'File too large. Max 10MB.'}), 413
 
-    # Store in memory
-    content_id = f"OFF-{len(official_content) + 1:03d}"
-    official_content[content_id] = {
-        'id': content_id,
-        'filename': file.filename,
-        'filepath': filepath,
-        'fingerprint': fingerprint,
-        'secure_url': secure_url,
-        'uploaded_at': datetime.utcnow().isoformat(),
-        'status': 'Active'
-    }
-    
-    return jsonify({
-        'success': True,
-        'content_id': content_id,
-        'filename': file.filename,
-        'fingerprint': fingerprint,
-        'secure_url': secure_url,
-        'message': 'Official content registered successfully'
-    })
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        filepath = os.path.join(UPLOAD_FOLDER, 'off_' + file.filename)
+        file.save(filepath)
+        print(f"[UPLOAD] File saved: {filepath}")
+
+        # 1. Generate fingerprint FIRST (local processing)
+        print(f"[UPLOAD] Generating fingerprint...")
+        fingerprint = generate_perceptual_hash(filepath)
+        print(f"[UPLOAD] Fingerprint generated successfully.")
+
+        # 2. Then Upload to Cloudinary
+        print(f"[UPLOAD] Uploading to Cloudinary...")
+        secure_url = "https://placeholder.com"
+        try:
+            upload_result = cloudinary.uploader.upload(
+                filepath, 
+                resource_type="auto", 
+                folder="sportshield_official"
+            )
+            secure_url = upload_result.get("secure_url")
+            print(f"[UPLOAD] Cloudinary success: {secure_url}")
+        except Exception as e:
+            print(f"[UPLOAD] Cloudinary WARNING: {e}")
+            # Continue even if Cloudinary fails for demo purposes
+        
+        content_id = f"OFF-{len(official_content) + 1:03d}"
+        official_content[content_id] = {
+            'id': content_id,
+            'filename': file.filename,
+            'fingerprint': fingerprint,
+            'secure_url': secure_url,
+            'uploaded_at': datetime.utcnow().isoformat(),
+            'status': 'Active'
+        }
+
+        print(f"[UPLOAD] Complete: {content_id}")
+        return jsonify({
+            'success': True,
+            'content_id': content_id,
+            'filename': file.filename,
+            'fingerprint': fingerprint,
+            'secure_url': secure_url
+        })
+
+    except Exception as e:
+        print(f"[UPLOAD] ERROR: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/upload/suspicious', methods=['POST'])
